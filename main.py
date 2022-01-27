@@ -6,6 +6,8 @@ import os
 import requests
 import re
 import pathlib
+import getopt
+import sys
 
 
 class AccessPoint:
@@ -45,6 +47,7 @@ def networkbind(dashboard, templatename, networkname, orgid):
     orgtemplates = dashboard.organizations.getOrganizationConfigTemplates(orgid)
     networkid = getnetworkid(orgnetworks, networkname)
     autobind = True
+    templateid = ''
 
     for template in orgtemplates:
         if template['name'] == templatename:
@@ -53,7 +56,7 @@ def networkbind(dashboard, templatename, networkname, orgid):
                 autobind = False
 
     try:
-        bindresponse = dashboard.networks.bindNetwork(networkid, templateid, autoBind=autobind)
+        dashboard.networks.bindNetwork(networkid, templateid, autoBind=autobind)
     except meraki.APIError as e:
         print('Bind failed. Error: ' + str(e))
     else:
@@ -144,40 +147,13 @@ def getnetworkid(_orgnetworks, _networkname):
             return network['id']
 
 
-def main():
+def main(argv):
     dashboard = meraki.DashboardAPI(print_console=False, output_log=False, suppress_logging=True)
     my_orgs = dashboard.organizations.getOrganizations()
     orglist = []
     orgid = ''
     oldorg = ''
-
-    print('Defaulting to guided run mode.\n')
-    print('Which Org are you moving from? Enter the number.')
-
-    i = 0
-    for org in my_orgs:
-        if org['name'] != 'Compass Group Surveillance':
-            orglist.append(org)
-            print(str(i + 1) + ') ' + org['name'])
-            i = i + 1
-
-    orginput = input()
-
-    if orginput == '1':
-        orgid = orglist[0]['id']
-        print(orglist[0]['name'] + ' selected.')
-        oldorg = orglist[0]['name']
-    elif orginput == '2':
-        orgid = orglist[1]['id']
-        print(orglist[1]['name'] + ' selected.')
-        oldorg = orglist[1]['name']
-    elif orginput == '3':
-        orgid = orglist[2]['id']
-        print(orglist[2]['name'] + ' selected.')
-        oldorg = orglist[2]['name']
-
-    orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid, total_pages='all')
-
+    runmode = ''
     mxlist = []
     mslist = []
     mrlist = []
@@ -188,15 +164,100 @@ def main():
     timezones = []
     configfilename = ''
 
-    print('What is the name of the source network(s)? Enter one at a time. Type \'end\' when done.')
+    try:
+        opts, args = getopt.getopt(argv, "hgcb")
+    except getopt.GetoptError:
+        print('Error. Try again.')
+        sys.exit(2)
+    for opt, arg in opts:
+        if opt == '-h':
+            print('Hermes Help Menu')
+            print('-g Guided run mode')
+            print('-c Config file mode')
+            print('-b Backup network settings mode')
+            sys.exit(2)
+        elif opt == '-g':
+            runmode = 'Guided'
+        elif opt == '-c':
+            runmode = 'ConfigFile'
+        elif opt == '-b':
+            runmode = 'Backup'
+        else:
+            print('Error. Try again.')
+            sys.exit(2)
 
-    while 'end' not in userinput:
-        userinput = input()
-        if 'lab' == userinput.lower():
-            sourcenetworks = []
-            break
-        if 'end' not in userinput.lower():
-            sourcenetworks.append(userinput)
+    if runmode == 'Guided':
+        print('Which Org are you moving from? Enter the number.')
+        i = 0
+        for org in my_orgs:
+            if org['name'] != 'Compass Group Surveillance':
+                orglist.append(org)
+                print(str(i + 1) + ') ' + org['name'])
+                i = i + 1
+        orginput = input()
+        if orginput == '1':
+            orgid = orglist[0]['id']
+            print(orglist[0]['name'] + ' selected.')
+            oldorg = orglist[0]['name']
+        elif orginput == '2':
+            orgid = orglist[1]['id']
+            print(orglist[1]['name'] + ' selected.')
+            oldorg = orglist[1]['name']
+        elif orginput == '3':
+            orgid = orglist[2]['id']
+            print(orglist[2]['name'] + ' selected.')
+            oldorg = orglist[2]['name']
+    elif runmode == 'ConfigFile':
+        for org in my_orgs:
+            if org['name'] == 'config file input':
+                orgid = org['id']
+    elif runmode == 'Backup':
+        print('Which Org is your network in? Enter the number.')
+        i = 0
+        for org in my_orgs:
+            if org['name'] != 'Compass Group Surveillance':
+                orglist.append(org)
+                print(str(i + 1) + ') ' + org['name'])
+                i = i + 1
+        orginput = input()
+        if orginput == '1':
+            orgid = orglist[0]['id']
+            print(orglist[0]['name'] + ' selected.')
+            oldorg = orglist[0]['name']
+        elif orginput == '2':
+            orgid = orglist[1]['id']
+            print(orglist[1]['name'] + ' selected.')
+            oldorg = orglist[1]['name']
+        elif orginput == '3':
+            orgid = orglist[2]['id']
+            print(orglist[2]['name'] + ' selected.')
+            oldorg = orglist[2]['name']
+
+    orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid, total_pages='all')
+
+    if runmode == 'Guided':
+        print('What is the name of the source network(s)? Enter one at a time. Type \'end\' when done.')
+
+        while 'end' not in userinput:
+            userinput = input()
+            if 'lab' == userinput.lower():
+                sourcenetworks = []
+                break
+            if 'end' not in userinput.lower():
+                sourcenetworks.append(userinput)
+
+    elif runmode == 'ConfigFile':
+        doesnothing = ''
+        # parse source networks
+    elif runmode == 'Backup':
+        print('What is the name of the network(s) to backup? Enter one at a time. Type \'end\' when done.')
+        while 'end' not in userinput:
+            userinput = input()
+            if 'lab' == userinput.lower():
+                sourcenetworks = []
+                break
+            if 'end' not in userinput.lower():
+                sourcenetworks.append(userinput)
 
     print('Downloading settings for network.')
 
@@ -264,263 +325,279 @@ def main():
     if reviewsettings == 'y':
         webbrowser.open(configfilename)
 
-    print('What is the name for the new network?')
-    newnetworkname = input()
+    # Backup Mode ends here
 
-    if re.search("[US]-[0-9]+[-][a-zA-Z]+|[CA]-[0-9]+[-][a-zA-Z]+", newnetworkname):
-        print('Field Site detected. Network will be created in Compass Field Sites Org.')
-        workingorg = 'Compass Group Field Sites'
-    elif re.search("[US][ ][a-zA-Z]+[ ][-][ ][a-zA-Z]+|[CA][ ][a-zA-Z]+[ ][-][ ][a-zA-Z]+", newnetworkname):
-        print('Remote Site detected. Network will be created in Compass Remote Offices Org.')
-        workingorg = 'Compass Group Remote Offices'
-    else:
-        while True:
-            print('Detecting network type failed. Choose manually...enter 1 or 2.')
-            print('1. - Compass Group Field Sites')
-            print('2. - Compass Group Remote Offices')
-            orgchoice = input()
-            if orgchoice == '1':
+    if runmode == 'ConfigFile' or 'Guided':
+        sys.exit(2)
+        if runmode == 'Guided':
+            print('What is the name for the new network?')
+            newnetworkname = input()
+            if re.search("[US]-[0-9]+[-][a-zA-Z]+|[CA]-[0-9]+[-][a-zA-Z]+", newnetworkname):
+                print('Field Site detected. Network will be created in Compass Field Sites Org.')
                 workingorg = 'Compass Group Field Sites'
-                break
-            elif orgchoice == '2':
+            elif re.search("[US][ ][a-zA-Z]+[ ][-][ ][a-zA-Z]+|[CA][ ][a-zA-Z]+[ ][-][ ][a-zA-Z]+", newnetworkname):
+                print('Remote Site detected. Network will be created in Compass Remote Offices Org.')
                 workingorg = 'Compass Group Remote Offices'
+            else:
+                while True:
+                    print('Detecting network type failed. Choose manually...enter 1 or 2.')
+                    print('1. - Compass Group Field Sites')
+                    print('2. - Compass Group Remote Offices')
+                    orgchoice = input()
+                    if orgchoice == '1':
+                        workingorg = 'Compass Group Field Sites'
+                        break
+                    elif orgchoice == '2':
+                        workingorg = 'Compass Group Remote Offices'
+                        break
+                    else:
+                        print('You entered neither a 1 or a 2. Try again.')
+        else:
+            workingorg = ''
+            newnetworkname = ''
+                # parse config file
+
+        while True:
+            print('The following serial numbers will be unclaimed:')
+            print(claimserials)
+            print('Proceed with unclaiming devices from org ' + oldorg + 'y/n')
+            unclaimresponse = input()
+
+            if unclaimresponse == 'y':
+                for networkdevices in networkdevicelist:
+                    for devices in networkdevices.devices:
+                        print('Removing:' + devices['serial'])
+                        dashboard.networks.removeNetworkDevices(networkdevices.networkid, devices['serial'])
                 break
             else:
-                print('You entered neither a 1 or a 2. Try again.')
+                print('Script paused. Input anything to continue.')
+                input()
 
-    while True:
-        print('The following serial numbers will be unclaimed:')
-        print(claimserials)
-        print('Proceed with unclaiming devices from org ' + oldorg + 'y/n')
-        unclaimresponse = input()
+        for org in my_orgs:
+            if workingorg == org['name']:
+                neworgid = org['id']
 
-        if unclaimresponse == 'y':
-            for networkdevices in networkdevicelist:
-                for devices in networkdevices.devices:
-                    print('Removing:' + devices['serial'])
-                    dashboard.networks.removeNetworkDevices(networkdevices.networkid, devices['serial'])
-            break
+        neworgnetworks = dashboard.organizations.getOrganizationNetworks(neworgid, total_pages='all')
+
+        result = doesnetworkexist(neworgid, neworgnetworks, newnetworkname)
+
+        if result == 'false':
+            print('Checking source network timezones.')
+            if all_same(timezones) is True:
+                print('All timezones match. New network will use: ' + timezones[0])
+                timezone = timezones[0]
+
+            else:
+                print('Source networks have mismatching timezones. Defaulting to EST')
+                timezone = 'America/New_York'
+
+            nwparams = {'name': newnetworkname, 'timeZone': timezone, 'organizationId': neworgid,
+                        'type': 'appliance switch wireless'}
+
+            createnetwork(neworgid, nwparams)
+
+        print('Claiming devices into the new network.')
+        claimdevices(dashboard, claimserials, neworgid, newnetworkname)
+
+        if runmode == 'Guided':
+            print('Which template do you want to bind this network to? Enter NA to skip.')
+            templates = dashboard.organizations.getOrganizationConfigTemplates(neworgid)
+
+            for template in templates:
+                print(str(template['name']))
+
+            while True:
+                templateinput = input()
+
+                if templateinput != '':
+                    template = templateinput
+                    break
+
         else:
-            print('Script paused. Input anything to continue.')
-            input()
+            template = ''
+                # parse config file
 
-    for org in my_orgs:
-        if workingorg == org['name']:
-            neworgid = org['id']
-
-    neworgnetworks = dashboard.organizations.getOrganizationNetworks(neworgid, total_pages='all')
-
-    result = doesnetworkexist(neworgid, neworgnetworks, newnetworkname)
-
-    if result == 'false':
-        print('Checking source network timezones.')
-        if all_same(timezones) is True:
-            print('All timezones match. New network will use: ' + timezones[0])
-            timezone = timezones[0]
-
+        if template.lower() != 'na':
+            print('Binding to template: ' + template)
+            networkbind(dashboard, template, newnetworkname, neworgid)
         else:
-            print('Source networks have mismatching timezones. Defaulting to EST')
-            timezone = 'America/New_York'
+            print('Skipping template bind.')
 
-        nwparams = {'name': newnetworkname, 'timeZone': timezone, 'organizationId': neworgid,
-                    'type': 'appliance switch wireless'}
+        input('It is recommended to wait a few minutes before uploading config....press any key to continue...')
+        print('Uploading config to devices.')
 
-        createnetwork(neworgid, nwparams)
+        neworgnetworks = dashboard.organizations.getOrganizationNetworks(neworgid, total_pages='all')
+        newnetworkid = getnetworkid(neworgnetworks, newnetworkname)
 
-    print('Claiming devices into the new network.')
-    claimdevices(dashboard, claimserials, neworgid, newnetworkname)
-
-    print('Which template do you want to bind this network to? Enter NA to skip.')
-    templates = dashboard.organizations.getOrganizationConfigTemplates(neworgid)
-
-    for template in templates:
-        print(str(template['name']))
-
-    while True:
-        templateinput = input()
-
-        if templateinput != '':
-            break
-
-    if templateinput.lower() != 'na':
-        print('Binding to template: ' + templateinput)
-        networkbind(dashboard, templateinput, newnetworkname, neworgid)
-    else:
-        print('Skipping template bind.')
-
-    input('Recommend waiting a few minutes before uploading config....press any key to continue...')
-    print('Uploading config to devices.')
-
-    neworgnetworks = dashboard.organizations.getOrganizationNetworks(neworgid, total_pages='all')
-    newnetworkid = getnetworkid(neworgnetworks, newnetworkname)
-
-    for mxdevice in mxlist:
-        dashboard.devices.updateDevice(mxdevice.serial, name=str(mxdevice.name))
-        if mxdevice.mgmtint['wan1']['usingStaticIp'] and mxdevice.mgmtint['wan2']['usingStaticIp']:
-            dashboard.devices.updateDeviceManagementInterface(mxdevice.serial, wan1={
-                'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
-                'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
-                'staticIp': mxdevice.mgmtint['wan1']['staticIp'],
-                'staticSubnetMask': mxdevice.mgmtint['wan1'][
-                    'staticSubnetMask'], 'staticGatewayIp': mxdevice.mgmtint['wan1'][
-                    'staticGatewayIp'], 'staticDns': mxdevice.mgmtint['wan1'][
-                    'staticDns'], 'vlan': mxdevice.mgmtint['wan1']['vlan']},
-                                                          wan2={'wanEnabled': mxdevice.mgmtint['wan2']['wanEnabled'],
-                                                                'usingStaticIp': mxdevice.mgmtint['wan2'][
-                                                                    'usingStaticIp'],
-                                                                'staticIp': mxdevice.mgmtint['wan2']['staticIp'],
-                                                                'staticSubnetMask': mxdevice.mgmtint['wan2'][
-                                                                    'staticSubnetMask'],
-                                                                'staticGatewayIp': mxdevice.mgmtint['wan2'][
-                                                                    'staticGatewayIp'],
-                                                                'staticDns': mxdevice.mgmtint['wan2'][
-                                                                    'staticDns'],
-                                                                'vlan': mxdevice.mgmtint['wan2']['vlan']})
-        elif mxdevice.mgmtint['wan1']['usingStaticIp'] and not mxdevice.mgmtint['wan2']['usingStaticIp']:
-            dashboard.devices.updateDeviceManagementInterface(mxdevice.serial, wan1={'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
-                                                                                     'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
-                                                                                     'staticIp': mxdevice.mgmtint['wan1']['staticIp'],
-                                                                                     'staticSubnetMask': mxdevice.mgmtint['wan1'][
-                                                                                     'staticSubnetMask'], 'staticGatewayIp': mxdevice.mgmtint['wan1'][
-                                                                                     'staticGatewayIp'], 'staticDns': mxdevice.mgmtint['wan1'][
-                                                                                     'staticDns'], 'vlan': mxdevice.mgmtint['wan1']['vlan']},
+        for mxdevice in mxlist:
+            dashboard.devices.updateDevice(mxdevice.serial, name=str(mxdevice.name))
+            if mxdevice.mgmtint['wan1']['usingStaticIp'] and mxdevice.mgmtint['wan2']['usingStaticIp']:
+                dashboard.devices.updateDeviceManagementInterface(mxdevice.serial, wan1={
+                    'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
+                    'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
+                    'staticIp': mxdevice.mgmtint['wan1']['staticIp'],
+                    'staticSubnetMask': mxdevice.mgmtint['wan1'][
+                        'staticSubnetMask'], 'staticGatewayIp': mxdevice.mgmtint['wan1'][
+                        'staticGatewayIp'], 'staticDns': mxdevice.mgmtint['wan1'][
+                        'staticDns'], 'vlan': mxdevice.mgmtint['wan1']['vlan']},
                                                               wan2={'wanEnabled': mxdevice.mgmtint['wan2']['wanEnabled'],
-                                                                    'usingStaticIp': mxdevice.mgmtint['wan2']['usingStaticIp'],
-                                                                    'vlan': mxdevice.mgmtint['wan2']['vlan']})
-        elif not mxdevice.mgmtint['wan1']['usingStaticIp'] and mxdevice.mgmtint['wan2']['usingStaticIp']:
-            dashboard.devices.updateDeviceManagementInterface(mxdevice.serial,
-                                                              wan1={'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
-                                                                    'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
-                                                                    'vlan': mxdevice.mgmtint['wan1']['vlan']},
-                                                              wan2={'wanEnabled': mxdevice.mgmtint['wan2']['wanEnabled'],
-                                                                    'usingStaticIp': mxdevice.mgmtint['wan2']['usingStaticIp'],
+                                                                    'usingStaticIp': mxdevice.mgmtint['wan2'][
+                                                                        'usingStaticIp'],
                                                                     'staticIp': mxdevice.mgmtint['wan2']['staticIp'],
                                                                     'staticSubnetMask': mxdevice.mgmtint['wan2'][
-                                                                          'staticSubnetMask'], 'staticGatewayIp': mxdevice.mgmtint['wan2'][
-                                                                      'staticGatewayIp'], 'staticDns': mxdevice.mgmtint['wan2'][
-                                                                      'staticDns'], 'vlan': mxdevice.mgmtint['wan2']['vlan']})
-        elif not mxdevice.mgmtint['wan1']['usingStaticIp'] and not mxdevice.mgmtint['wan2']['usingStaticIp']:
-            dashboard.devices.updateDeviceManagementInterface(mxdevice.serial,
-                                                              wan1={'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
-                                                                    'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
-                                                                    'vlan': mxdevice.mgmtint['wan1']['vlan']},
-                                                              wan2={'wanEnabled': mxdevice.mgmtint['wan2']['wanEnabled'],
-                                                                    'usingStaticIp': mxdevice.mgmtint['wan2']['usingStaticIp'],
+                                                                        'staticSubnetMask'],
+                                                                    'staticGatewayIp': mxdevice.mgmtint['wan2'][
+                                                                        'staticGatewayIp'],
+                                                                    'staticDns': mxdevice.mgmtint['wan2'][
+                                                                        'staticDns'],
                                                                     'vlan': mxdevice.mgmtint['wan2']['vlan']})
+            elif mxdevice.mgmtint['wan1']['usingStaticIp'] and not mxdevice.mgmtint['wan2']['usingStaticIp']:
+                dashboard.devices.updateDeviceManagementInterface(mxdevice.serial, wan1={'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
+                                                                                         'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
+                                                                                         'staticIp': mxdevice.mgmtint['wan1']['staticIp'],
+                                                                                         'staticSubnetMask': mxdevice.mgmtint['wan1'][
+                                                                                         'staticSubnetMask'], 'staticGatewayIp': mxdevice.mgmtint['wan1'][
+                                                                                         'staticGatewayIp'], 'staticDns': mxdevice.mgmtint['wan1'][
+                                                                                         'staticDns'], 'vlan': mxdevice.mgmtint['wan1']['vlan']},
+                                                                  wan2={'wanEnabled': mxdevice.mgmtint['wan2']['wanEnabled'],
+                                                                        'usingStaticIp': mxdevice.mgmtint['wan2']['usingStaticIp'],
+                                                                        'vlan': mxdevice.mgmtint['wan2']['vlan']})
+            elif not mxdevice.mgmtint['wan1']['usingStaticIp'] and mxdevice.mgmtint['wan2']['usingStaticIp']:
+                dashboard.devices.updateDeviceManagementInterface(mxdevice.serial,
+                                                                  wan1={'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
+                                                                        'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
+                                                                        'vlan': mxdevice.mgmtint['wan1']['vlan']},
+                                                                  wan2={'wanEnabled': mxdevice.mgmtint['wan2']['wanEnabled'],
+                                                                        'usingStaticIp': mxdevice.mgmtint['wan2']['usingStaticIp'],
+                                                                        'staticIp': mxdevice.mgmtint['wan2']['staticIp'],
+                                                                        'staticSubnetMask': mxdevice.mgmtint['wan2'][
+                                                                              'staticSubnetMask'], 'staticGatewayIp': mxdevice.mgmtint['wan2'][
+                                                                          'staticGatewayIp'], 'staticDns': mxdevice.mgmtint['wan2'][
+                                                                          'staticDns'], 'vlan': mxdevice.mgmtint['wan2']['vlan']})
+            elif not mxdevice.mgmtint['wan1']['usingStaticIp'] and not mxdevice.mgmtint['wan2']['usingStaticIp']:
+                dashboard.devices.updateDeviceManagementInterface(mxdevice.serial,
+                                                                  wan1={'wanEnabled': mxdevice.mgmtint['wan1']['wanEnabled'],
+                                                                        'usingStaticIp': mxdevice.mgmtint['wan1']['usingStaticIp'],
+                                                                        'vlan': mxdevice.mgmtint['wan1']['vlan']},
+                                                                  wan2={'wanEnabled': mxdevice.mgmtint['wan2']['wanEnabled'],
+                                                                        'usingStaticIp': mxdevice.mgmtint['wan2']['usingStaticIp'],
+                                                                        'vlan': mxdevice.mgmtint['wan2']['vlan']})
 
-        if workingorg != 'Compass Group Field Sites':
-            for port in mxdevice.netports:
-                if port['type'] == 'trunk':
-                    dashboard.appliance.updateNetworkAppliancePort(newnetworkid, portId=port['number'],
-                                                                   enabled=port['enabled'],
-                                                                   type=port['type'],
-                                                                   vlan=port['vlan'],
-                                                                   dropUntaggedTraffic=port['dropUntaggedTraffic'],
-                                                                   allowedVlans=port['allowedVlans'])
-                else:
-                    dashboard.appliance.updateNetworkAppliancePort(newnetworkid, portId=port['number'],
-                                                                   enabled=port['enabled'],
-                                                                   type=port['type'],
-                                                                   dropUntaggedTraffic=port['dropUntaggedTraffic'],
-                                                                   vlan=port['vlan'])
-        for vlan in mxdevice.netvlans:
             if workingorg != 'Compass Group Field Sites':
-                vlanexists = False
-                try:
-                    vlantocheck = dashboard.appliance.getNetworkApplianceVlan(newnetworkid, vlan['id'])
-                    if vlan['id'] == vlantocheck['id']:
-                        vlanexists = True
-                except meraki.APIError as e:
-                    print(str(e))
-
-                if vlanexists is False:
-                    dashboard.appliance.createNetworkApplianceVlan(newnetworkid, id=vlan['id'], name=vlan['name'],
-                                                                   applianceIp=vlan['applianceIp'],
-                                                                   subnet=vlan['subnet'])
-                dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, vlan['id'], name=vlan['name'],
-                                                               applianceIp=vlan['applianceIp'],
-                                                               subnet=vlan['subnet'],
-                                                               fixedIpAssignments=vlan['fixedIpAssignments'],
-                                                               reservedIpRanges=vlan['reservedIpRanges'],
-                                                               dnsNameservers=vlan['dnsNameservers'],
-                                                               dhcpHandling=vlan['dhcpHandling'],
-                                                               dhcpLeaseTime=vlan['dhcpLeaseTime'],
-                                                               dhcpBootOptionsEnabled=vlan['dhcpBootOptionsEnabled'],
-                                                               dhcpOptions=vlan['dhcpOptions'])
-            else:
-                print('Updating Field Site VLAN: ' + str(vlan['id']))
-                if str(vlan['id']) not in ['1', '150', '151', '152', '153', '20', '60', '70', '80']:
-                    if str(vlan['id']) == '10':
-                        mxvlan = '125'
-                    elif str(vlan['id']) == '30':
-                        mxvlan = '135'
+                for port in mxdevice.netports:
+                    if port['type'] == 'trunk':
+                        dashboard.appliance.updateNetworkAppliancePort(newnetworkid, portId=port['number'],
+                                                                       enabled=port['enabled'],
+                                                                       type=port['type'],
+                                                                       vlan=port['vlan'],
+                                                                       dropUntaggedTraffic=port['dropUntaggedTraffic'],
+                                                                       allowedVlans=port['allowedVlans'])
                     else:
-                        mxvlan = vlan['id']
-                    dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, mxvlan,
+                        dashboard.appliance.updateNetworkAppliancePort(newnetworkid, portId=port['number'],
+                                                                       enabled=port['enabled'],
+                                                                       type=port['type'],
+                                                                       dropUntaggedTraffic=port['dropUntaggedTraffic'],
+                                                                       vlan=port['vlan'])
+            for vlan in mxdevice.netvlans:
+                if workingorg != 'Compass Group Field Sites':
+                    vlanexists = False
+                    try:
+                        vlantocheck = dashboard.appliance.getNetworkApplianceVlan(newnetworkid, vlan['id'])
+                        if vlan['id'] == vlantocheck['id']:
+                            vlanexists = True
+                    except meraki.APIError as e:
+                        print(str(e))
+
+                    if vlanexists is False:
+                        dashboard.appliance.createNetworkApplianceVlan(newnetworkid, id=vlan['id'], name=vlan['name'],
+                                                                       applianceIp=vlan['applianceIp'],
+                                                                       subnet=vlan['subnet'])
+                    dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, vlan['id'], name=vlan['name'],
                                                                    applianceIp=vlan['applianceIp'],
                                                                    subnet=vlan['subnet'],
                                                                    fixedIpAssignments=vlan['fixedIpAssignments'],
-                                                                   reservedIpRanges=vlan['reservedIpRanges'])
-        try:
-            dashboard.appliance.updateNetworkApplianceFirewallOneToManyNatRules(newnetworkid, mxdevice.manynat['rules'])
-        except meraki.APIError as e:
-            print(str(e))
-        try:
-            dashboard.appliance.updateNetworkApplianceFirewallOneToOneNatRules(newnetworkid, mxdevice.onenat['rules'])
-        except meraki.APIError as e:
-            print(str(e))
-        try:
-            dashboard.appliance.updateNetworkApplianceFirewallPortForwardingRules(newnetworkid, mxdevice.portforward['rules'])
-        except meraki.APIError as e:
-            print(str(e))
-
-    for msdevice in mslist:
-        dashboard.devices.updateDevice(msdevice.serial, name=str(msdevice.name))
-        for switchport in msdevice.ports:
-            if switchport['type'] == 'access':
-                if str(switchport['vlan']) == '10':
-                    portvlan = '125'
-                elif str(switchport['vlan']) == '30':
-                    portvlan = '135'
+                                                                   reservedIpRanges=vlan['reservedIpRanges'],
+                                                                   dnsNameservers=vlan['dnsNameservers'],
+                                                                   dhcpHandling=vlan['dhcpHandling'],
+                                                                   dhcpLeaseTime=vlan['dhcpLeaseTime'],
+                                                                   dhcpBootOptionsEnabled=vlan['dhcpBootOptionsEnabled'],
+                                                                   dhcpOptions=vlan['dhcpOptions'])
                 else:
-                    portvlan = '120'
-                dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
-                                                        tags=switchport['tags'], enabled=switchport['enabled'],
-                                                        type=switchport['type'], vlan=portvlan,
-                                                        voiceVlan='110',
-                                                        poeEnabled=switchport['poeEnabled'],
-                                                        isolationEnabled=switchport['isolationEnabled'],
-                                                        rstpEnabled=switchport['rstpEnabled'],
-                                                        stpGuard=switchport['stpGuard'],
-                                                        linkNegotiation=switchport['linkNegotiation'],
-                                                        portScheduleId=switchport['portScheduleId'],
-                                                        udld=switchport['udld'],
-                                                        accessPolicyType=switchport['accessPolicyType'],
-                                                        )
-            else:
-                if str(switchport['vlan']) == '10':
-                    portvlan = '125'
+                    if str(vlan['id']) not in ['1', '150', '151', '152', '153', '20', '60', '70', '80']:
+                        if str(vlan['id']) == '10':
+                            mxvlan = '125'
+                        elif str(vlan['id']) == '30':
+                            mxvlan = '135'
+                        else:
+                            mxvlan = vlan['id']
+                        dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, mxvlan,
+                                                                       applianceIp=vlan['applianceIp'],
+                                                                       subnet=vlan['subnet'],
+                                                                       fixedIpAssignments=vlan['fixedIpAssignments'],
+                                                                       reservedIpRanges=vlan['reservedIpRanges'])
+            try:
+                dashboard.appliance.updateNetworkApplianceFirewallOneToManyNatRules(newnetworkid, mxdevice.manynat['rules'])
+            except meraki.APIError as e:
+                print(str(e))
+            try:
+                dashboard.appliance.updateNetworkApplianceFirewallOneToOneNatRules(newnetworkid, mxdevice.onenat['rules'])
+            except meraki.APIError as e:
+                print(str(e))
+            try:
+                dashboard.appliance.updateNetworkApplianceFirewallPortForwardingRules(newnetworkid, mxdevice.portforward['rules'])
+            except meraki.APIError as e:
+                print(str(e))
+
+        for msdevice in mslist:
+            dashboard.devices.updateDevice(msdevice.serial, name=str(msdevice.name))
+            for switchport in msdevice.ports:
+                if switchport['type'] == 'access':
+                    if str(switchport['vlan']) == '10':
+                        portvlan = '125'
+                    elif str(switchport['vlan']) == '30':
+                        portvlan = '135'
+                    else:
+                        portvlan = '120'
+                    dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
+                                                            tags=switchport['tags'], enabled=switchport['enabled'],
+                                                            type=switchport['type'], vlan=portvlan,
+                                                            voiceVlan='110',
+                                                            poeEnabled=switchport['poeEnabled'],
+                                                            isolationEnabled=switchport['isolationEnabled'],
+                                                            rstpEnabled=switchport['rstpEnabled'],
+                                                            stpGuard=switchport['stpGuard'],
+                                                            linkNegotiation=switchport['linkNegotiation'],
+                                                            portScheduleId=switchport['portScheduleId'],
+                                                            udld=switchport['udld'],
+                                                            accessPolicyType=switchport['accessPolicyType'],
+                                                            )
                 else:
-                    portvlan = '1'
-                dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
-                                                        tags=switchport['tags'], enabled=switchport['enabled'],
-                                                        type=switchport['type'], vlan=portvlan,
-                                                        allowedVlans=switchport['allowedVlans'],
-                                                        poeEnabled=switchport['poeEnabled'],
-                                                        isolationEnabled=switchport['isolationEnabled'],
-                                                        rstpEnabled=switchport['rstpEnabled'],
-                                                        stpGuard=switchport['stpGuard'],
-                                                        linkNegotiation=switchport['linkNegotiation'],
-                                                        portScheduleId=switchport['portScheduleId'],
-                                                        udld=switchport['udld'],
-                                                        accessPolicyType=switchport['accessPolicyType'],
-                                                        )
+                    if str(switchport['vlan']) == '10':
+                        portvlan = '125'
+                    else:
+                        portvlan = '1'
+                    dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
+                                                            tags=switchport['tags'], enabled=switchport['enabled'],
+                                                            type=switchport['type'], vlan=portvlan,
+                                                            allowedVlans=switchport['allowedVlans'],
+                                                            poeEnabled=switchport['poeEnabled'],
+                                                            isolationEnabled=switchport['isolationEnabled'],
+                                                            rstpEnabled=switchport['rstpEnabled'],
+                                                            stpGuard=switchport['stpGuard'],
+                                                            linkNegotiation=switchport['linkNegotiation'],
+                                                            portScheduleId=switchport['portScheduleId'],
+                                                            udld=switchport['udld'],
+                                                            accessPolicyType=switchport['accessPolicyType'],
+                                                            )
 
-    for mrdevice in mrlist:
-        dashboard.devices.updateDevice(mrdevice.serial, name=str(mrdevice.name))
+        for mrdevice in mrlist:
+            dashboard.devices.updateDevice(mrdevice.serial, name=str(mrdevice.name))
 
-    print('Configuration complete. Settings file can be found at ' + str(pathlib.Path().resolve()) + configfilename)
+        print('Configuration complete. Settings file can be found at ' + str(pathlib.Path().resolve()) + configfilename)
+    else:
+        sys.exit(2)
 
 
 if __name__ == '__main__':
-    main()
+    main(sys.argv[1:])
+
