@@ -148,27 +148,27 @@ def getnetworkid(_orgnetworks, _networkname):
 
 
 def main(argv):
-    dashboard = meraki.DashboardAPI(print_console=False, output_log=False, suppress_logging=True)
-    my_orgs = dashboard.organizations.getOrganizations()
-    orglist = []
-    orgid = ''
-    oldorg = ''
-    runmode = ''
-    mxlist = []
-    mslist = []
-    mrlist = []
-    claimserials = []
-    sourcenetworks = []
-    userinput = ''
-    networkdevicelist = []
-    timezones = []
-    configfilename = ''
+    dashboard = meraki.DashboardAPI(print_console=False, output_log=False, suppress_logging=True)  # Create session with Dashboard
+    my_orgs = dashboard.organizations.getOrganizations()  # Get Orgs
+    orglist = []  # List of Orgs
+    orgid = ''  # ID of the org to pull networks from
+    oldorg = ''  # old org networks are moving from
+    runmode = ''  # mode the script will run in
+    mxlist = []  # list of MX devices
+    mslist = []  # list of Switching devices
+    mrlist = []  # list of wireless devices
+    claimserials = []  # serials to be claimed into new network
+    sourcenetworks = []  # networks to be used to pull down devices and settings
+    networkdevicelist = []  # list for network devices
+    timezones = []  # list of old network timezones
+    configfilename = ''  # out file for the config downloaded from source networks
+    userinput = ''  # variable for input use later
 
     try:
-        opts, args = getopt.getopt(argv, "hgcb")
+        opts, args = getopt.getopt(argv, "hgcb")  # Collect cmd argument inputs
     except getopt.GetoptError:
         print('Error. Try again.')
-        sys.exit(2)
+        sys.exit(2)  # exit script as args didnt match what we look for
     for opt, arg in opts:
         if opt == '-h':
             print('Hermes Help Menu')
@@ -184,8 +184,9 @@ def main(argv):
             runmode = 'Backup'
         else:
             print('Error. Try again.')
-            sys.exit(2)
+            sys.exit(2)  # exit script as args didnt match what we look for
 
+    #  Figure out which Org to use.
     if runmode == 'Guided':
         print('Which Org are you moving from? Enter the number.')
         i = 0
@@ -233,8 +234,10 @@ def main(argv):
             print(orglist[2]['name'] + ' selected.')
             oldorg = orglist[2]['name']
 
+    #  Get the networks from the Org from last step
     orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid, total_pages='all')
 
+    # Figure out the networks we want to use.
     if runmode == 'Guided':
         print('What is the name of the source network(s)? Enter one at a time. Type \'end\' when done.')
 
@@ -245,7 +248,6 @@ def main(argv):
                 break
             if 'end' not in userinput.lower():
                 sourcenetworks.append(userinput)
-
     elif runmode == 'ConfigFile':
         doesnothing = ''
         # parse source networks
@@ -261,12 +263,14 @@ def main(argv):
 
     print('Downloading settings for network.')
 
+    #  Get the network devices from the selected networks
     for network in sourcenetworks:
         netid = getnetworkid(orgnetworks, network)
         networkdevicelist.append(NetworkDevices(netid, dashboard.networks.getNetworkDevices(netid)))
         networkresponse = dashboard.networks.getNetwork(netid)
         timezones.append(networkresponse['timeZone'])
 
+    #  Get the settings from the devices in the networks.
     for networkdevices in networkdevicelist:
         for devices in networkdevices.devices:
             claimserials.append(devices['serial'])
@@ -291,6 +295,7 @@ def main(argv):
             else:
                 mrlist.append(AccessPoint(devices['serial'], name))
 
+    #  Write out the downloaded settings to the out file.
     with open(r'networkconfig' + str(datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")).replace(' ', '') + '.txt', 'w') as f:
         configfilename = f.name
         f.write('APPLIANCES:\n')
@@ -322,11 +327,12 @@ def main(argv):
     print('Downloading of settings is complete. Would you like to review whats been downloaded? y/n')
     reviewsettings = input()
 
+    # Open notepad if you want to review the settings.
     if reviewsettings == 'y':
         webbrowser.open(configfilename)
 
-    # Backup Mode ends here
-
+    #  Backup Mode ends here
+    #  Setup new network and move devices and upload config
     if runmode == 'ConfigFile' or 'Guided':
         sys.exit(2)
         if runmode == 'Guided':

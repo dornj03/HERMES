@@ -1,10 +1,17 @@
 import meraki
-
+import xml.etree.ElementTree as ET
 
 def getnetworkid(_orgnetworks, _networkname):
     for network in _orgnetworks:
         if network['name'] == _networkname:
             return network['id']
+
+
+class AccessPoint:
+    def __init__(self, serial, name):
+        self.serial = serial
+        self.name = name
+
 
 class Switch:
     def __init__(self, serial, name, ports):
@@ -13,25 +20,35 @@ class Switch:
         self.ports = ports
 
 
+class NetworkDevices:
+    def __init__(self, networkid, devices):
+        self.networkid = networkid
+        self.devices = devices
+
+
+class Appliance:
+    def __init__(self, serial, name, mgmtint, subnets, manynat, onenat, portforward, netports, netvlans):
+        self.serial = serial
+        self.name = name
+        self.mgmtint = mgmtint
+        self.subnets = subnets
+        self.manynat = manynat
+        self.onenat = onenat
+        self.portforward = portforward
+        self.netports = netports
+        self.netvlans = netvlans
+
+
 def main():
-    dashboard = meraki.DashboardAPI(print_console=False, output_log=False, suppress_logging=False)
-    my_orgs = dashboard.organizations.getOrganizations()
-    orgid = ''
-    newnetworkname = 'LAB-FortM'
-    claimlist = ['Q2QN-KUMG-BEVA', 'Q2PD-3GT8-WKKE', 'Q2HP-FYW2-PBP5']
-
-    for org in my_orgs:
-        if 'Compass Group Field Sites' in org['name']:
-            orgid = org['id']
-
-    orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid, total_pages='all')
-
-    newnetworkid = getnetworkid(orgnetworks, newnetworkname)
-
-    # orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid)
-    name = dashboard.devices.getDevice('Q2QN-KUMG-BEVA')
-    print(name)
-    dashboard.devices.updateDevice('Q2QN-KUMG-BEVA', name=str(name['name']))
+    root = ET.parse('config.xml').getroot()
+    for child in root:
+        if child.tag == 'SourceOrg':
+            print(child.text)
+        elif child.tag == 'SourceNetworks':
+            for network in child:
+                print(network.text)
+        elif child.tag == 'NewNetwork':
+            print(child.text)
 
 
 if __name__ == '__main__':
