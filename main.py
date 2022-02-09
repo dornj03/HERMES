@@ -46,7 +46,7 @@ def networkbind(dashboard, templatename, networkname, orgid):
     orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid)
     orgtemplates = dashboard.organizations.getOrganizationConfigTemplates(orgid)
     networkid = getnetworkid(orgnetworks, networkname)
-    autobind = True
+    autobind = False
     templateid = ''
 
     for template in orgtemplates:
@@ -334,7 +334,6 @@ def main(argv):
     #  Backup Mode ends here
     #  Setup new network and move devices and upload config
     if runmode == 'ConfigFile' or 'Guided':
-        sys.exit(2)
         if runmode == 'Guided':
             print('What is the name for the new network?')
             newnetworkname = input()
@@ -366,7 +365,7 @@ def main(argv):
         while True:
             print('The following serial numbers will be unclaimed:')
             print(claimserials)
-            print('Proceed with unclaiming devices from org ' + oldorg + 'y/n')
+            print('Proceed with unclaiming devices from org ' + oldorg + '? y/n')
             unclaimresponse = input()
 
             if unclaimresponse == 'y':
