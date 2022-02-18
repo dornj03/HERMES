@@ -1,5 +1,8 @@
 import meraki
 import xml.etree.ElementTree as ET
+import getopt
+import sys
+
 
 def getnetworkid(_orgnetworks, _networkname):
     for network in _orgnetworks:
@@ -40,14 +43,13 @@ class Appliance:
 
 
 def main():
+    sourcenetworks = []
     root = ET.parse('config.xml').getroot()
+
     for child in root:
-        if child.tag == 'SourceOrg':
+        if child.tag == 'NewNetwork':
             print(child.text)
-        elif child.tag == 'SourceNetworks':
-            for network in child:
-                print(network.text)
-        elif child.tag == 'NewNetwork':
+        if child.tag == 'DestinationOrg':
             print(child.text)
 
 

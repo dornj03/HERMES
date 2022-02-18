@@ -8,6 +8,7 @@ import re
 import pathlib
 import getopt
 import sys
+import xml.etree.ElementTree as ET
 
 
 class AccessPoint:
@@ -163,9 +164,10 @@ def main(argv):
     timezones = []  # list of old network timezones
     configfilename = ''  # out file for the config downloaded from source networks
     userinput = ''  # variable for input use later
+    inputfile = ''  # xml file for config mode
 
     try:
-        opts, args = getopt.getopt(argv, "hgcb")  # Collect cmd argument inputs
+        opts, args = getopt.getopt(argv, "hgbtc:")  # Collect cmd argument inputs
     except getopt.GetoptError:
         print('Error. Try again.')
         sys.exit(2)  # exit script as args didnt match what we look for
@@ -174,12 +176,16 @@ def main(argv):
             print('Hermes Help Menu')
             print('-g Guided run mode')
             print('-c Config file mode')
+            print('-t Template rebind mode')
             print('-b Backup network settings mode')
             sys.exit(2)
         elif opt == '-g':
             runmode = 'Guided'
         elif opt == '-c':
             runmode = 'ConfigFile'
+            inputfile = arg
+        elif opt == '-t':
+            runmode = 'Template'
         elif opt == '-b':
             runmode = 'Backup'
         else:
@@ -187,7 +193,7 @@ def main(argv):
             sys.exit(2)  # exit script as args didnt match what we look for
 
     #  Figure out which Org to use.
-    if runmode == 'Guided':
+    if runmode == 'Guided' or 'Backup' or 'Template':
         print('Which Org are you moving from? Enter the number.')
         i = 0
         for org in my_orgs:
@@ -209,30 +215,14 @@ def main(argv):
             print(orglist[2]['name'] + ' selected.')
             oldorg = orglist[2]['name']
     elif runmode == 'ConfigFile':
+        root = ET.parse(inputfile).getroot()  # config file root
+        for child in root:
+            if child.tag == 'SourceOrg':
+                oldorg = child.text
+
         for org in my_orgs:
-            if org['name'] == 'config file input':
+            if org['name'] == oldorg:
                 orgid = org['id']
-    elif runmode == 'Backup':
-        print('Which Org is your network in? Enter the number.')
-        i = 0
-        for org in my_orgs:
-            if org['name'] != 'Compass Group Surveillance':
-                orglist.append(org)
-                print(str(i + 1) + ') ' + org['name'])
-                i = i + 1
-        orginput = input()
-        if orginput == '1':
-            orgid = orglist[0]['id']
-            print(orglist[0]['name'] + ' selected.')
-            oldorg = orglist[0]['name']
-        elif orginput == '2':
-            orgid = orglist[1]['id']
-            print(orglist[1]['name'] + ' selected.')
-            oldorg = orglist[1]['name']
-        elif orginput == '3':
-            orgid = orglist[2]['id']
-            print(orglist[2]['name'] + ' selected.')
-            oldorg = orglist[2]['name']
 
     #  Get the networks from the Org from last step
     orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid, total_pages='all')
@@ -249,8 +239,9 @@ def main(argv):
             if 'end' not in userinput.lower():
                 sourcenetworks.append(userinput)
     elif runmode == 'ConfigFile':
-        doesnothing = ''
-        # parse source networks
+        for xmlnetwork in root.iter("Network"):
+            sourcenetworks.append(xmlnetwork.text)
+        print(sourcenetworks)
     elif runmode == 'Backup':
         print('What is the name of the network(s) to backup? Enter one at a time. Type \'end\' when done.')
         while 'end' not in userinput:
@@ -260,6 +251,10 @@ def main(argv):
                 break
             if 'end' not in userinput.lower():
                 sourcenetworks.append(userinput)
+    elif runmode == 'Template':
+        print('What is the name of the network you are rebinding?')
+        userinput = input()
+        sourcenetworks.append(userinput)
 
     print('Downloading settings for network.')
 
@@ -333,8 +328,7 @@ def main(argv):
 
     #  Backup Mode ends here
     #  Setup new network and move devices and upload config
-    if runmode == 'ConfigFile' or 'Guided':
-        sys.exit(2)
+    if runmode == 'ConfigFile' or 'Guided' or 'Template':
         if runmode == 'Guided':
             print('What is the name for the new network?')
             newnetworkname = input()
@@ -358,52 +352,57 @@ def main(argv):
                         break
                     else:
                         print('You entered neither a 1 or a 2. Try again.')
-        else:
+        elif runmode == 'ConfigFile':
             workingorg = ''
             newnetworkname = ''
-                # parse config file
 
-        while True:
-            print('The following serial numbers will be unclaimed:')
-            print(claimserials)
-            print('Proceed with unclaiming devices from org ' + oldorg + 'y/n')
-            unclaimresponse = input()
+            for child in root:
+                if child.tag == 'NewNetwork':
+                    newnetworkname = child.text
+                if child.tag == 'DestinationOrg':
+                    workingorg = child.text
+        if runmode in ('ConfigFile', 'Guided'):
+            while True:
+                print('The following serial numbers will be unclaimed:')
+                print(claimserials)
+                print('Proceed with unclaiming devices from org ' + oldorg + ' y/n')
+                unclaimresponse = input()
 
-            if unclaimresponse == 'y':
-                for networkdevices in networkdevicelist:
-                    for devices in networkdevices.devices:
-                        print('Removing:' + devices['serial'])
-                        dashboard.networks.removeNetworkDevices(networkdevices.networkid, devices['serial'])
-                break
-            else:
-                print('Script paused. Input anything to continue.')
-                input()
+                if unclaimresponse == 'y':
+                    for networkdevices in networkdevicelist:
+                        for devices in networkdevices.devices:
+                            print('Removing:' + devices['serial'])
+                            dashboard.networks.removeNetworkDevices(networkdevices.networkid, devices['serial'])
+                    break
+                else:
+                    print('Script paused. Input anything to continue.')
+                    input()
 
-        for org in my_orgs:
-            if workingorg == org['name']:
-                neworgid = org['id']
+            for org in my_orgs:
+                if workingorg == org['name']:
+                    neworgid = org['id']
 
-        neworgnetworks = dashboard.organizations.getOrganizationNetworks(neworgid, total_pages='all')
+            neworgnetworks = dashboard.organizations.getOrganizationNetworks(neworgid, total_pages='all')
 
-        result = doesnetworkexist(neworgid, neworgnetworks, newnetworkname)
+            result = doesnetworkexist(neworgid, neworgnetworks, newnetworkname)
 
-        if result == 'false':
-            print('Checking source network timezones.')
-            if all_same(timezones) is True:
-                print('All timezones match. New network will use: ' + timezones[0])
-                timezone = timezones[0]
+            if result == 'false':
+                print('Checking source network timezones.')
+                if all_same(timezones) is True:
+                    print('All timezones match. New network will use: ' + timezones[0])
+                    timezone = timezones[0]
 
-            else:
-                print('Source networks have mismatching timezones. Defaulting to EST')
-                timezone = 'America/New_York'
+                else:
+                    print('Source networks have mismatching timezones. Defaulting to EST')
+                    timezone = 'America/New_York'
 
-            nwparams = {'name': newnetworkname, 'timeZone': timezone, 'organizationId': neworgid,
-                        'type': 'appliance switch wireless'}
+                nwparams = {'name': newnetworkname, 'timeZone': timezone, 'organizationId': neworgid,
+                            'type': 'appliance switch wireless'}
 
-            createnetwork(neworgid, nwparams)
+                createnetwork(neworgid, nwparams)
 
-        print('Claiming devices into the new network.')
-        claimdevices(dashboard, claimserials, neworgid, newnetworkname)
+            print('Claiming devices into the new network.')
+            claimdevices(dashboard, claimserials, neworgid, newnetworkname)
 
         if runmode == 'Guided':
             print('Which template do you want to bind this network to? Enter NA to skip.')
@@ -418,10 +417,30 @@ def main(argv):
                 if templateinput != '':
                     template = templateinput
                     break
+        elif runmode == 'Template':
+            print('Unbinding from current template.')
+            print(sourcenetworks[0])
+            dashboard.networks.unbindNetwork(getnetworkid(orgnetworks, sourcenetworks[0]))
+            print('Which template do you want to bind this network to? Enter NA to skip.')
+            templates = dashboard.organizations.getOrganizationConfigTemplates(orgid)
 
+            for template in templates:
+                print(str(template['name']))
+
+            while True:
+                templateinput = input()
+
+                if templateinput != '':
+                    template = templateinput
+                    break
+            neworgid = orgid
+            newnetworkname = sourcenetworks[0]
+            workingorg = oldorg
         else:
             template = ''
-                # parse config file
+            for child in root:
+                if child.tag == 'NewTemplate':
+                    template = child.text
 
         if template.lower() != 'na':
             print('Binding to template: ' + template)
@@ -554,52 +573,85 @@ def main(argv):
             except meraki.APIError as e:
                 print(str(e))
 
-        for msdevice in mslist:
-            dashboard.devices.updateDevice(msdevice.serial, name=str(msdevice.name))
-            for switchport in msdevice.ports:
-                if switchport['type'] == 'access':
-                    if str(switchport['vlan']) == '10':
-                        portvlan = '125'
-                    elif str(switchport['vlan']) == '30':
-                        portvlan = '135'
+        if runmode != 'Template':
+            for msdevice in mslist:
+                dashboard.devices.updateDevice(msdevice.serial, name=str(msdevice.name))
+                for switchport in msdevice.ports:
+                    if switchport['type'] == 'access':
+                        if str(switchport['vlan']) == '10':
+                            portvlan = '125'
+                        elif str(switchport['vlan']) == '30':
+                            portvlan = '135'
+                        else:
+                            portvlan = '120'
+                        dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
+                                                                tags=switchport['tags'], enabled=switchport['enabled'],
+                                                                type=switchport['type'], vlan=portvlan,
+                                                                voiceVlan='110',
+                                                                poeEnabled=switchport['poeEnabled'],
+                                                                isolationEnabled=switchport['isolationEnabled'],
+                                                                rstpEnabled=switchport['rstpEnabled'],
+                                                                stpGuard=switchport['stpGuard'],
+                                                                linkNegotiation=switchport['linkNegotiation'],
+                                                                portScheduleId=switchport['portScheduleId'],
+                                                                udld=switchport['udld'],
+                                                                accessPolicyType=switchport['accessPolicyType'],
+                                                                )
                     else:
-                        portvlan = '120'
-                    dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
-                                                            tags=switchport['tags'], enabled=switchport['enabled'],
-                                                            type=switchport['type'], vlan=portvlan,
-                                                            voiceVlan='110',
-                                                            poeEnabled=switchport['poeEnabled'],
-                                                            isolationEnabled=switchport['isolationEnabled'],
-                                                            rstpEnabled=switchport['rstpEnabled'],
-                                                            stpGuard=switchport['stpGuard'],
-                                                            linkNegotiation=switchport['linkNegotiation'],
-                                                            portScheduleId=switchport['portScheduleId'],
-                                                            udld=switchport['udld'],
-                                                            accessPolicyType=switchport['accessPolicyType'],
-                                                            )
-                else:
-                    if str(switchport['vlan']) == '10':
-                        portvlan = '125'
+                        if str(switchport['vlan']) == '10':
+                            portvlan = '125'
+                        else:
+                            portvlan = '1'
+                        dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
+                                                                tags=switchport['tags'], enabled=switchport['enabled'],
+                                                                type=switchport['type'], vlan=portvlan,
+                                                                allowedVlans=switchport['allowedVlans'],
+                                                                poeEnabled=switchport['poeEnabled'],
+                                                                isolationEnabled=switchport['isolationEnabled'],
+                                                                rstpEnabled=switchport['rstpEnabled'],
+                                                                stpGuard=switchport['stpGuard'],
+                                                                linkNegotiation=switchport['linkNegotiation'],
+                                                                portScheduleId=switchport['portScheduleId'],
+                                                                udld=switchport['udld'],
+                                                                accessPolicyType=switchport['accessPolicyType'],
+                                                                )
+        else:
+            for msdevice in mslist:
+                dashboard.devices.updateDevice(msdevice.serial, name=str(msdevice.name))
+                for switchport in msdevice.ports:
+                    if switchport['type'] == 'access':
+                        dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
+                                                                tags=switchport['tags'], enabled=switchport['enabled'],
+                                                                type=switchport['type'], vlan=switchport['vlan'],
+                                                                voiceVlan=switchport['voiceVlan'],
+                                                                poeEnabled=switchport['poeEnabled'],
+                                                                isolationEnabled=switchport['isolationEnabled'],
+                                                                rstpEnabled=switchport['rstpEnabled'],
+                                                                stpGuard=switchport['stpGuard'],
+                                                                linkNegotiation=switchport['linkNegotiation'],
+                                                                portScheduleId=switchport['portScheduleId'],
+                                                                udld=switchport['udld'],
+                                                                accessPolicyType=switchport['accessPolicyType'],
+                                                                )
                     else:
-                        portvlan = '1'
-                    dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
-                                                            tags=switchport['tags'], enabled=switchport['enabled'],
-                                                            type=switchport['type'], vlan=portvlan,
-                                                            allowedVlans=switchport['allowedVlans'],
-                                                            poeEnabled=switchport['poeEnabled'],
-                                                            isolationEnabled=switchport['isolationEnabled'],
-                                                            rstpEnabled=switchport['rstpEnabled'],
-                                                            stpGuard=switchport['stpGuard'],
-                                                            linkNegotiation=switchport['linkNegotiation'],
-                                                            portScheduleId=switchport['portScheduleId'],
-                                                            udld=switchport['udld'],
-                                                            accessPolicyType=switchport['accessPolicyType'],
-                                                            )
+                        dashboard.switch.updateDeviceSwitchPort(msdevice.serial, switchport['portId'], name=switchport['name'],
+                                                                tags=switchport['tags'], enabled=switchport['enabled'],
+                                                                type=switchport['type'], vlan=switchport['vlan'],
+                                                                allowedVlans=switchport['allowedVlans'],
+                                                                poeEnabled=switchport['poeEnabled'],
+                                                                isolationEnabled=switchport['isolationEnabled'],
+                                                                rstpEnabled=switchport['rstpEnabled'],
+                                                                stpGuard=switchport['stpGuard'],
+                                                                linkNegotiation=switchport['linkNegotiation'],
+                                                                portScheduleId=switchport['portScheduleId'],
+                                                                udld=switchport['udld'],
+                                                                accessPolicyType=switchport['accessPolicyType'],
+                                                                )
 
         for mrdevice in mrlist:
             dashboard.devices.updateDevice(mrdevice.serial, name=str(mrdevice.name))
 
-        print('Configuration complete. Settings file can be found at ' + str(pathlib.Path().resolve()) + configfilename)
+        print('Configuration complete. Settings file can be found at ' + str(pathlib.Path().resolve()) + '\\' + configfilename)
     else:
         sys.exit(2)
 
