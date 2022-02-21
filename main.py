@@ -47,7 +47,7 @@ def networkbind(dashboard, templatename, networkname, orgid):
     orgnetworks = dashboard.organizations.getOrganizationNetworks(orgid)
     orgtemplates = dashboard.organizations.getOrganizationConfigTemplates(orgid)
     networkid = getnetworkid(orgnetworks, networkname)
-    autobind = True
+    autobind = False
     templateid = ''
 
     for template in orgtemplates:
