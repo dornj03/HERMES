@@ -194,7 +194,7 @@ def main(argv):
 
     #  Figure out which Org to use.
     if runmode == 'Guided' or 'Backup' or 'Template':
-        print('Which Org are you moving from? Enter the number.')
+        print('What is your source Org? Enter the number.')
         i = 0
         for org in my_orgs:
             if org['name'] != 'Compass Group Surveillance':
@@ -534,19 +534,25 @@ def main(argv):
                         print(str(e))
 
                     if vlanexists is False:
-                        dashboard.appliance.createNetworkApplianceVlan(newnetworkid, id=vlan['id'], name=vlan['name'],
+                        try:
+                            dashboard.appliance.createNetworkApplianceVlan(newnetworkid, id=vlan['id'], name=vlan['name'],
+                                                                           applianceIp=vlan['applianceIp'],
+                                                                           subnet=vlan['subnet'])
+                        except meraki.APIError as e:
+                            print(str(e))
+                    try:
+                        dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, vlan['id'], name=vlan['name'],
                                                                        applianceIp=vlan['applianceIp'],
-                                                                       subnet=vlan['subnet'])
-                    dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, vlan['id'], name=vlan['name'],
-                                                                   applianceIp=vlan['applianceIp'],
-                                                                   subnet=vlan['subnet'],
-                                                                   fixedIpAssignments=vlan['fixedIpAssignments'],
-                                                                   reservedIpRanges=vlan['reservedIpRanges'],
-                                                                   dnsNameservers=vlan['dnsNameservers'],
-                                                                   dhcpHandling=vlan['dhcpHandling'],
-                                                                   dhcpLeaseTime=vlan['dhcpLeaseTime'],
-                                                                   dhcpBootOptionsEnabled=vlan['dhcpBootOptionsEnabled'],
-                                                                   dhcpOptions=vlan['dhcpOptions'])
+                                                                       subnet=vlan['subnet'],
+                                                                       fixedIpAssignments=vlan['fixedIpAssignments'],
+                                                                       reservedIpRanges=vlan['reservedIpRanges'],
+                                                                       dnsNameservers=vlan['dnsNameservers'],
+                                                                       dhcpHandling=vlan['dhcpHandling'],
+                                                                       dhcpLeaseTime=vlan['dhcpLeaseTime'],
+                                                                       dhcpBootOptionsEnabled=vlan['dhcpBootOptionsEnabled'],
+                                                                       dhcpOptions=vlan['dhcpOptions'])
+                    except meraki.APIError as e:
+                        print(str(e))
                 else:
                     if str(vlan['id']) not in ['1', '150', '151', '152', '153', '20', '60', '70', '80']:
                         if str(vlan['id']) == '10':
@@ -555,11 +561,14 @@ def main(argv):
                             mxvlan = '135'
                         else:
                             mxvlan = vlan['id']
-                        dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, mxvlan,
-                                                                       applianceIp=vlan['applianceIp'],
-                                                                       subnet=vlan['subnet'],
-                                                                       fixedIpAssignments=vlan['fixedIpAssignments'],
-                                                                       reservedIpRanges=vlan['reservedIpRanges'])
+                        try:
+                            dashboard.appliance.updateNetworkApplianceVlan(newnetworkid, mxvlan,
+                                                                           applianceIp=vlan['applianceIp'],
+                                                                           subnet=vlan['subnet'],
+                                                                           fixedIpAssignments=vlan['fixedIpAssignments'],
+                                                                           reservedIpRanges=vlan['reservedIpRanges'])
+                        except meraki.APIError as e:
+                            print(str(e))
             try:
                 dashboard.appliance.updateNetworkApplianceFirewallOneToManyNatRules(newnetworkid, mxdevice.manynat['rules'])
             except meraki.APIError as e:
