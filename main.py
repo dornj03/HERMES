@@ -181,13 +181,17 @@ def main(argv):
             sys.exit(2)
         elif opt == '-g':
             runmode = 'Guided'
+            print('Running in guided mode.')
         elif opt == '-c':
             runmode = 'ConfigFile'
             inputfile = arg
+            print('Running in config file mode.')
         elif opt == '-t':
             runmode = 'Template'
+            print('Running in template rebind mode.')
         elif opt == '-b':
             runmode = 'Backup'
+            print('Running in backup mode.')
         else:
             print('Error. Try again.')
             sys.exit(2)  # exit script as args didnt match what we look for
@@ -291,32 +295,38 @@ def main(argv):
                 mrlist.append(AccessPoint(devices['serial'], name))
 
     #  Write out the downloaded settings to the out file.
-    with open(r'networkconfig' + str(datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")).replace(' ', '') + '.txt', 'w') as f:
+    with open(r'networkconfig' + str(datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")).replace(' ', '') + '.xml', 'w') as f:
         configfilename = f.name
-        f.write('APPLIANCES:\n')
+        f.write('<Network' + ' name=\'' + sourcenetworks[0] + '\'>\n')
+        f.write('<Appliances>\n')
         for mx in mxlist:
-            f.write('\n' + 'Serial: ' + str(mx.serial) + '\n')
-            f.write('WAN Interfaces: ' + str(mx.mgmtint) + '\n')
-            f.write('MX Switching Ports: ' + str(mx.netports) + '\n')
-            f.write('1:1 NAT: ' + str(mx.onenat) + '\n')
-            f.write('1:M NAT: ' + str(mx.manynat) + '\n')
-            f.write('Port Forwarding: ' + str(mx.portforward) + '\n')
-            f.write('DHCP Subnets: ' + str(mx.subnets) + '\n')
-            f.write('Vlans: ' + str(mx.netvlans) + '\n')
+            f.write('<MX>\n')
+            f.write('<Serial>' + str(mx.serial) + '</Serial>\n')
+            f.write('<Wan>' + str(mx.mgmtint['wan1']) + '</Wan>\n')
+            f.write('<Ports>' + str(mx.netports) + '</Ports>\n')
+            f.write('<ONENAT>' + str(mx.onenat) + '</ONENAT>\n')
+            f.write('<MANYNAT>' + str(mx.manynat) + '</MANYNAT>\n')
+            f.write('<PortForward>' + str(mx.portforward) + '</PortForward>\n')
+            f.write('<DHCPSubnets>' + str(mx.subnets) + '</DHCPSubnets>\n')
+            f.write('<Vlans>' + str(mx.netvlans) + '</Vlans>\n')
+            f.write('</MX>\n')
+        f.write('</Appliances>\n')
 
-        f.write('\nSWITCHES:\n')
+        f.write('<Switches>\n')
         for ms in mslist:
-            f.write('\n' + 'Serial: ' + str(ms.serial) + '\n')
-            f.write('Switchports: ' + str(ms.ports) + '\n')
-
-        f.write('\nACCESS POINTs:\n')
+            f.write('<MS>\n')
+            f.write('<Serial>' + str(ms.serial) + '</Serial>\n')
+            f.write('<Ports>' + str(ms.ports) + '</Ports>\n')
+            f.write('</MS>\n')
+        f.write('</Switches>\n')
+        f.write('<AccessPoints>\n')
         for mr in mrlist:
-            f.write('\n' + 'Serial: ' + str(mr.serial) + '\n')
-            f.write('Name: ' + str(mr.name) + '\n')
-
-        f.write('\nSerials Downloaded: ' + str(claimserials))
-
-        f.write('\nSource Networks: ' + str(sourcenetworks))
+            f.write('<MR>\n')
+            f.write('<Serial>' + str(mr.serial) + '</Serial>\n')
+            f.write('<Name>' + str(mr.name) + '</Name>\n')
+            f.write('</MR>\n')
+        f.write('</AccessPoints>\n')
+        f.write('</Network>\n')
         f.close()
 
     print('Downloading of settings is complete. Would you like to review whats been downloaded? y/n')
@@ -328,7 +338,7 @@ def main(argv):
 
     #  Backup Mode ends here
     #  Setup new network and move devices and upload config
-    if runmode == 'ConfigFile' or 'Guided' or 'Template':
+    if runmode in ('ConfigFile', 'Guided', 'Template'):
         if runmode == 'Guided':
             print('What is the name for the new network?')
             newnetworkname = input()
@@ -662,6 +672,7 @@ def main(argv):
 
         print('Configuration complete. Settings file can be found at ' + str(pathlib.Path().resolve()) + '\\' + configfilename)
     else:
+        print('Backup complete. Settings file can be found at ' + str(pathlib.Path().resolve()) + '\\' + configfilename)
         sys.exit(2)
 
 
