@@ -60,17 +60,17 @@ def main(argv):
     mrlist = []  # list of wireless devices
     networkdevicelist = []  # list for network devices
     configfilename = ''  # out file for the config downloaded from source networks
-    """
+
     try:
         opts, args = getopt.getopt(argv, "a:b:")  # Collect cmd argument inputs
     except Exception as e:
         var = None
     for opt, arg in opts:
         if opt == '-a':
-            org = args
+            org = arg
         elif opt == '-b':
-            network = args
-    """
+            network = arg
+
     org = 'Compass Group Remote Offices'
     network = 'US LAB - Greenwood'
 
