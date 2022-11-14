@@ -116,8 +116,11 @@ def main(argv):
                 "AccessPoints": {},
             }
     }
+
+    i = 0
     for mx in mxlist:
-        json_data['Network']['Firewalls'][mx.name] = {
+        json_data['Network']['Firewalls']['MX' + str(i)] = {
+            "Name": mx.name,
             "Serial": mx.serial,
             "WAN": mx.mgmtint['wan1'],
             "Ports": mx.netports,
@@ -127,15 +130,24 @@ def main(argv):
             "DHCP Subnets": mx.subnets,
             "Vlans": mx.netvlans
             }
+        i += 1
+
+    i = 0
     for ms in mslist:
-        json_data['Network']['Switches'][ms.name] = {
+        json_data['Network']['Switches']['MS' + str(i)] = {
+            "Name": ms.name,
             "Serial": ms.serial,
             "Ports": ms.ports,
         }
+        i += 1
+
+    i = 0
     for mr in mrlist:
-        json_data['Network']['AccessPoints'][mr.name] = {
+        json_data['Network']['AccessPoints']['MR' + str(i)] = {
+            "Name": mr.name,
             "Serial": mr.serial,
         }
+        i += 1
 
     json_string = json.dumps(json_data)
     with open(r'networkconfig' + str(datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")).replace(' ', '') + '.json', 'w') as datafile:
